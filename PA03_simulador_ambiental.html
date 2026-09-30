@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Simulador PA03 - Procesamiento Paralelo y Distribuido Ambiental</title>
+<style>
+:root{
+  --ink:#172033; --navy:#173a5e; --blue:#4e7fae; --bg:#f3f6fa;
+  --card:#ffffff; --line:#d6e0ea; --soft:#edf3f9; --ok:#eaf7ef;
+  --okb:#8bc7a0; --bad:#fdeeee; --badb:#df9c9c; --warn:#fff6e6; --warnb:#d9b46f;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--navy);color:white;padding:18px 24px}
+header h1{margin:0 0 5px;font-size:24px}
+header p{margin:0;color:#dbe9f5;font-size:14px}
+.container{max-width:980px;margin:auto;padding:18px}
+.section-title{font-size:20px;margin:22px 0 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:15px;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+label{display:block;font-size:13px;margin:7px 0 4px}
+input,select,button{width:100%;padding:9px;border:1px solid #c7d3df;border-radius:8px;font:inherit}
+button{background:var(--navy);color:#fff;border:0;cursor:pointer;margin-top:8px}
+button:hover{background:#244f78}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px}
+.metric{background:var(--soft);border-radius:9px;padding:9px;text-align:center}
+.metric b{display:block;font-size:17px}
+.small{font-size:12px;color:#5e6d7d}
+.worker{margin:7px 0}.bar{height:24px;background:#e1e9f2;border-radius:8px;overflow:hidden}
+.fill{height:100%;background:var(--blue);color:white;text-align:right;padding-right:6px;line-height:24px;white-space:nowrap}
+.status{padding:10px;border-radius:8px;margin-top:9px;font-size:14px}.ok{background:var(--ok);border:1px solid var(--okb)}
+.bad{background:var(--bad);border:1px solid var(--badb)}.warn{background:var(--warn);border:1px solid var(--warnb)}
+table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border:1px solid var(--line);padding:7px;text-align:center;font-size:13px}th{background:#eaf1f7}
+svg{width:100%;height:auto}.note{font-size:12px;color:#5e6d7d;margin:8px 0 0}
+.mono{font-family:Consolas,monospace;background:#101722;color:white;border-radius:8px;padding:10px;white-space:pre-wrap;font-size:12px}
+.flow{display:flex;flex-wrap:wrap;gap:7px;align-items:center}.pill{background:var(--soft);border:1px solid var(--line);padding:7px 9px;border-radius:8px;font-size:13px}.arrow{color:#60758a}
+@media(max-width:760px){.grid,.grid3{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<header>
+<h1>Simulador de Procesamiento Paralelo y Distribuido Ambiental - Sierra Central</h1>
+<p>PA03 · comunicación, sincronización, concurrencia, tolerancia a fallos y consistencia distribuida.</p>
+</header>
+
+<div class="container">
+
+<section id="escenario">
+<h2 class="section-title">1. Escenario masivo</h2>
+<div class="card">
+  <div class="grid">
+    <div><label>Estaciones</label><input id="stations" type="number" value="500">
+         <label>Sensores por estación</label><input id="sensors" type="number" value="8"></div>
+    <div><label>Frecuencia de muestreo (s)</label><input id="freq" type="number" value="1">
+         <label>Workers</label><input id="workers" type="number" min="2" max="64" value="8"></div>
+    <div><label>Escenario de carga</label>
+      <select id="scenario"><option value="uniform">P1 - Uniforme</option><option value="irregular" selected>P2 - Irregular</option><option value="critical">P3 - Evento crítico</option></select>
+    </div>
+    <div><label>Estrategia</label>
+      <select id="strategy"><option>Block</option><option>Cyclic</option><option selected>Dynamic</option><option>Work Stealing</option></select>
+    </div>
+  </div>
+  <button id="runMain">Ejecutar simulación</button>
+  <div class="metrics" id="scenarioMetrics"></div>
+</div>
+</section>
+
+<section id="arquitectura">
+<h2 class="section-title">2. Arquitectura distribuida</h2>
+<div class="card">
+<svg viewBox="0 0 960 245" role="img" aria-label="Arquitectura del procesamiento ambiental distribuido">
+<defs><marker id="arr" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#355c7d"/></marker></defs>
+<g font-family="Arial" font-size="12" text-anchor="middle">
+<rect x="15" y="95" width="110" height="45" rx="9" fill="#e8f0f8" stroke="#355c7d"/><text x="70" y="122">Sensores</text>
+<rect x="155" y="95" width="115" height="45" rx="9" fill="#e8f0f8" stroke="#355c7d"/><text x="212" y="122">Receptor MQTT</text>
+<rect x="305" y="95" width="120" height="45" rx="9" fill="#fff6e6" stroke="#b07b32"/><text x="365" y="122">Cola de ventanas</text>
+<rect x="465" y="35" width="120" height="45" rx="9" fill="#edf7ee" stroke="#4f7c5a"/><text x="525" y="62">Workers limpieza</text>
+<rect x="465" y="155" width="120" height="45" rx="9" fill="#edf7ee" stroke="#4f7c5a"/><text x="525" y="182">Workers análisis</text>
+<rect x="625" y="95" width="120" height="45" rx="9" fill="#f4eef9" stroke="#78558c"/><text x="685" y="122">Correlador</text>
+<rect x="785" y="95" width="80" height="45" rx="9" fill="#eaf1f7" stroke="#60758a"/><text x="825" y="122">Agregador</text>
+<rect x="895" y="95" width="50" height="45" rx="9" fill="#fdecec" stroke="#a64b4b"/><text x="920" y="122">Alerta</text>
+<g stroke="#355c7d" stroke-width="2" marker-end="url(#arr)">
+<line x1="125" y1="118" x2="155" y2="118"/><line x1="270" y1="118" x2="305" y2="118"/>
+<line x1="425" y1="118" x2="465" y2="58"/><line x1="425" y1="118" x2="465" y2="178"/>
+<line x1="585" y1="58" x2="625" y2="105"/><line x1="585" y1="178" x2="625" y2="130"/>
+<line x1="745" y1="118" x2="785" y2="118"/><line x1="865" y1="118" x2="895" y2="118"/>
+</g>
+<text x="210" y="165" fill="#56697d">ingreso distribuido</text>
+<text x="525" y="222" fill="#56697d">memoria compartida local por nodo</text>
+<text x="705" y="165" fill="#56697d">TCP / broker interno</text>
+</g>
+</svg>
+</div>
+</section>
+
+<section id="scheduling">
+<h2 class="section-title">3. Scheduling y balanceo</h2>
+<div class="grid">
+<div class="card"><h3>Distribución por worker</h3><div id="workerBars"></div></div>
+<div class="card"><h3>Métricas</h3><div id="metricsTable"></div></div>
+</div>
+</section>
+
+<section id="comunicacion">
+<h2 class="section-title">4. Comunicación distribuida</h2>
+<div class="grid">
+<div class="card">
+  <h3>Modelo de costo α + n/B</h3>
+  <label>Protocolo</label><select id="protocol"><option selected>TCP / broker</option><option>MQTT</option><option>UDP</option></select>
+  <label>Latencia α por mensaje (ms)</label><input id="alpha" type="number" value="0.8" step="0.1">
+  <label>Ancho de banda B (MB/s)</label><input id="bw" type="number" value="120">
+  <label>Payload total (KB)</label><input id="payload" type="number" value="1024">
+  <label>Número de mensajes</label><input id="msgs" type="number" value="32">
+  <button id="runComm">Calcular costo</button>
+</div>
+<div class="card">
+  <h3>Resultado</h3>
+  <div class="metrics" style="grid-template-columns:repeat(2,1fr)">
+    <div class="metric"><span>Tiempo comunicación</span><b id="commTime">-</b></div>
+    <div class="metric"><span>Tamaño/mensaje</span><b id="msgSize">-</b></div>
+    <div class="metric"><span>Latencia fija acumulada</span><b id="fixedLatency">-</b></div>
+    <div class="metric"><span>Transferencia útil</span><b id="payloadTime">-</b></div>
+  </div>
+  <div id="commDiag" class="status warn"></div>
+</div>
+</div>
+</section>
+
+<section id="race">
+<h2 class="section-title">5. Condición de carrera</h2>
+<div class="grid">
+<div class="card"><h3>Sin exclusión mutua</h3><label>Actualizaciones esperadas</label><input id="expected" type="number" value="10000"><button id="raceUnsafeBtn">Ejecutar sin mutex</button><div id="raceUnsafe"></div></div>
+<div class="card"><h3>Con exclusión mutua</h3><button id="raceSafeBtn">Ejecutar con mutex</button><div id="raceSafe"></div></div>
+</div>
+</section>
+
+<section id="deadlock">
+<h2 class="section-title">6. Deadlock y prevención</h2>
+<div class="grid">
+<div class="card"><h3>Orden inseguro</h3><div class="mono">A: ColaResultados → RegistroAlertas
+B: RegistroAlertas → ColaResultados</div><button id="deadUnsafeBtn">Simular</button><div id="deadUnsafe"></div></div>
+<div class="card"><h3>Orden global</h3><div class="mono">A: ColaResultados → RegistroAlertas
+B: ColaResultados → RegistroAlertas</div><button id="deadSafeBtn">Simular</button><div id="deadSafe"></div></div>
+</div>
+<div class="card" id="waitGraph">
+  <h3>Wait-for graph conceptual</h3>
+  <div class="flow"><span class="pill">Proceso A</span><span class="arrow">→ espera →</span><span class="pill">Proceso B</span><span class="arrow">→ espera →</span><span class="pill">Proceso A</span></div>
+  <p class="note">El ciclo A → B → A evidencia espera circular. El orden global rompe esta condición de Coffman.</p>
+</div>
+</section>
+
+<section id="retry">
+<h2 class="section-title">7. Timeout, reintentos e idempotencia</h2>
+<div class="grid">
+<div class="card">
+  <label>Operaciones lógicas</label><input id="ops" type="number" value="1000">
+  <label>Tasa de timeout (%)</label><input id="timeoutRate" type="number" value="4" step="0.5">
+  <button id="runRetry">Simular reintentos</button>
+</div>
+<div class="card"><div id="retryOut"></div></div>
+</div>
+</section>
+
+<section id="quorum">
+<h2 class="section-title">8. Replicación, quórum y CAP</h2>
+<div class="grid">
+<div class="card">
+  <h3>Quórum N-R-W</h3>
+  <div class="grid3">
+    <div><label>N</label><input id="N" type="number" value="3"></div>
+    <div><label>R</label><input id="R" type="number" value="2"></div>
+    <div><label>W</label><input id="W" type="number" value="2"></div>
+  </div>
+  <button id="runQ">Evaluar quórum</button>
+  <div id="qOut"></div>
+</div>
+<div class="card">
+  <h3>Partición de red</h3>
+  <label>Política durante partición</label>
+  <select id="capPolicy"><option value="C" selected>Priorizar consistencia</option><option value="A">Priorizar disponibilidad</option></select>
+  <button id="runCAP">Simular partición</button>
+  <div id="capOut"></div>
+</div>
+</div>
+</section>
+
+<section id="escalabilidad">
+<h2 class="section-title">9. Prueba de escalabilidad</h2>
+<div class="card"><button id="runScale">Ejecutar con 4, 8, 16 y 32 workers</button><div id="scaleTable"></div></div>
+</section>
+
+<section id="checklist">
+<h2 class="section-title">10. Checklist PA03</h2>
+<div class="card">
+<table>
+<tr><th>Requisito</th><th>Evidencia en el simulador</th></tr>
+<tr><td>Modelo de comunicación</td><td>MQTT en ingreso + TCP/broker interno + modelo α+n/B</td></tr>
+<tr><td>Mecanismo de sincronización</td><td>Mutex y coordinación regional</td></tr>
+<tr><td>Problema de concurrencia</td><td>Condición de carrera del contador</td></tr>
+<tr><td>Prevención de deadlock</td><td>Orden global + wait-for graph</td></tr>
+<tr><td>Tolerancia básica a fallos</td><td>Timeout, reintento e idempotencia</td></tr>
+<tr><td>Consistencia distribuida</td><td>Quórum y decisión CAP durante partición</td></tr>
+<tr><td>Métricas</td><td>Tp, speedup, eficiencia, desbalance y costo de comunicación</td></tr>
+</table>
+</div>
+</section>
+
+</div>
+
+<script>
+const baseLoads={
+uniform:[5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5],
+irregular:[4,11,3,18,6,5,14,2,9,22,4,7,3,16,5,4,20,6,8,3,19,5,4,12],
+critical:[3,4,5,21,24,20,18,4,3,5,22,19,4,3,5,6,21,23,4,5,3,18,20,4]
+};
+
+function schedule(loads,p,strategy){
+  const workers=Array.from({length:p},()=>({load:0,tasks:[]}));
+  if(strategy==="Block"){
+    const q=Math.ceil(loads.length/p);
+    loads.forEach((v,i)=>{let w=Math.min(Math.floor(i/q),p-1);workers[w].load+=v;workers[w].tasks.push(v)});
+  } else if(strategy==="Cyclic"){
+    loads.forEach((v,i)=>{let w=i%p;workers[w].load+=v;workers[w].tasks.push(v)});
+  } else if(strategy==="Dynamic"){
+    loads.forEach(v=>{let w=workers.reduce((b,x,i,a)=>x.load<a[b].load?i:b,0);workers[w].load+=v+0.25;workers[w].tasks.push(v)});
+  } else {
+    loads.forEach((v,i)=>{let w=i%p;workers[w].load+=v;workers[w].tasks.push(v)});
+    for(let k=0;k<20;k++){
+      let hi=workers.reduce((b,x,i,a)=>x.load>a[b].load?i:b,0),lo=workers.reduce((b,x,i,a)=>x.load<a[b].load?i:b,0);
+      if(workers[hi].tasks.length<=1) break;
+      let task=workers[hi].tasks.pop();workers[hi].load-=task;workers[lo].tasks.push(task);workers[lo].load+=task+0.35;
+      if(workers[hi].load-workers[lo].load<2) break;
+    }
+  }
+  return workers;
+}
+
+function calcMetrics(workers,loads,p,strategy){
+  const total=workers.reduce((s,w)=>s+w.load,0),max=Math.max(...workers.map(w=>w.load)),avg=total/p,Ts=loads.reduce((a,b)=>a+b,0);
+  const cf=strategy==="Block"?0.05:strategy==="Cyclic"?0.08:strategy==="Dynamic"?0.12:0.15;
+  const comm=Ts*cf,sync=Math.max(1,p*0.25),Tp=max+comm+sync,S=Ts/Tp,E=S/p;
+  return {max,avg,imb:max/avg,Ts,Tp,S,E,comm,sync};
+}
+
+function runMain(){
+  const p=Math.max(2,+workers.value||8),loads=baseLoads[scenario.value],ws=schedule(loads,p,strategy.value),m=calcMetrics(ws,loads,p,strategy.value);
+  const vars=(+stations.value||500)*(+sensors.value||8)/Math.max(1,+freq.value||1);
+  scenarioMetrics.innerHTML=`<div class="metric"><span>Variables/s</span><b>${vars.toLocaleString()}</b></div>
+  <div class="metric"><span>Registros/h</span><b>${Math.round(vars*3600).toLocaleString()}</b></div>
+  <div class="metric"><span>Workers</span><b>${p}</b></div>
+  <div class="metric"><span>Estrategia</span><b style="font-size:14px">${strategy.value}</b></div>`;
+  const mx=Math.max(...ws.map(w=>w.load));
+  workerBars.innerHTML=ws.map((w,i)=>`<div class="worker"><div class="small">Worker ${i+1} · carga ${w.load.toFixed(2)}</div><div class="bar"><div class="fill" style="width:${(w.load/mx*100).toFixed(1)}%">${w.tasks.join(", ")}</div></div></div>`).join("");
+  metricsTable.innerHTML=`<table><tr><th>Métrica</th><th>Valor</th></tr>
+  <tr><td>Ts</td><td>${m.Ts.toFixed(2)}</td></tr><tr><td>Tp</td><td>${m.Tp.toFixed(2)}</td></tr>
+  <tr><td>Makespan</td><td>${m.max.toFixed(2)}</td></tr><tr><td>Carga promedio</td><td>${m.avg.toFixed(2)}</td></tr>
+  <tr><td>Índice de desbalance</td><td>${m.imb.toFixed(3)}</td></tr><tr><td>Speedup</td><td>${m.S.toFixed(3)}</td></tr>
+  <tr><td>Eficiencia</td><td>${(m.E*100).toFixed(2)} %</td></tr></table>`;
+}
+function runComm(){
+  const a=Math.max(0,+alpha.value)/1000,B=Math.max(1,+bw.value)*1e6,p=Math.max(1,+payload.value)*1024,m=Math.max(1,+msgs.value);
+  const size=p/m,Tfixed=m*a,Tpayload=p/B,T=Tfixed+Tpayload;
+  commTime.textContent=(T*1000).toFixed(2)+" ms";msgSize.textContent=(size/1024).toFixed(1)+" KB";
+  fixedLatency.textContent=(Tfixed*1000).toFixed(2)+" ms";payloadTime.textContent=(Tpayload*1000).toFixed(2)+" ms";
+  const ratio=Tfixed/T;
+  commDiag.innerHTML=ratio>0.5?`<b>Diagnóstico:</b> domina la latencia fija (${(ratio*100).toFixed(1)} % del costo). Conviene agrupar mensajes si la aplicación lo permite.`:
+  `<b>Diagnóstico:</b> domina la transferencia útil. Reducir payload o aumentar ancho de banda tendría mayor efecto.`;
+}
+function raceTest(safe){
+  const e=Math.max(1,+expected.value||10000),lost=Math.round(e*0.057),obs=safe?e:e-lost,target=safe?raceSafe:raceUnsafe;
+  target.innerHTML=safe?`<div class="status ok"><b>Resultado consistente</b><br>Esperado: ${e}<br>Observado: ${obs}<br>Sección crítica protegida por mutex.</div>`:
+  `<div class="status bad"><b>Condición de carrera detectada</b><br>Esperado: ${e}<br>Observado: ${obs}<br>Actualizaciones perdidas: ${lost}</div>`;
+}
+function deadTest(safe){
+  const t=safe?deadSafe:deadUnsafe;
+  t.innerHTML=safe?`<div class="status ok"><b>Ejecución segura</b><br>Ambos procesos adquieren recursos en el mismo orden.<br>Se elimina la espera circular.</div>`:
+  `<div class="status bad"><b>Espera circular detectada</b><br>A posee ColaResultados y espera RegistroAlertas.<br>B posee RegistroAlertas y espera ColaResultados.</div>`;
+}
+function retrySim(){
+  const o=Math.max(1,+ops.value||1000),rate=Math.min(100,Math.max(0,+timeoutRate.value||4))/100,timeouts=Math.round(o*rate);
+  const duplicates=timeouts,logical=o;
+  retryOut.innerHTML=`<table><tr><th>Escenario</th><th>Efectos aplicados</th><th>Duplicados</th></tr>
+  <tr><td>Reintento sin idempotencia</td><td>${o+duplicates}</td><td>${duplicates}</td></tr>
+  <tr><td>Reintento con request_id idempotente</td><td>${logical}</td><td>0</td></tr></table>
+  <div class="status warn"><b>Lectura:</b> un timeout no demuestra que la operación no se ejecutó. El identificador estable evita aplicar dos veces la misma operación lógica.</div>`;
+}
+function quorumSim(){
+  const n=Math.max(1,+N.value||3),r=Math.max(1,+R.value||2),w=Math.max(1,+W.value||2);
+  const rw=r+w>n,ww=2*w>n;
+  qOut.innerHTML=`<div class="status ${rw&&ww?'ok':'warn'}"><b>${rw&&ww?'Configuración con intersección':'Revisar configuración'}</b><br>
+  R + W = ${r+w} ${rw?'&gt;':'≤'} N = ${n}<br>2W = ${2*w} ${ww?'&gt;':'≤'} N = ${n}<br>
+  Lectura espera ${r} respuesta(s); escritura espera ${w} ACK(s).</div>`;
+}
+function capSim(){
+  capOut.innerHTML=capPolicy.value==="C"?`<div class="status ok"><b>Partición: se prioriza consistencia</b><br>El nodo sin quórum rechaza escrituras. Baja disponibilidad temporal, pero se evitan estados incompatibles.</div>`:
+  `<div class="status warn"><b>Partición: se prioriza disponibilidad</b><br>Los lados de la partición aceptan operaciones y deberán reconciliar divergencias después. Se tolera inconsistencia temporal.</div>`;
+}
+function scale(){
+  const loads=baseLoads.irregular,rows=[4,8,16,32].map(p=>{const ws=schedule(loads,p,"Dynamic"),m=calcMetrics(ws,loads,p,"Dynamic");return [p,m.Tp,m.S,m.E,m.imb]});
+  scaleTable.innerHTML=`<table><tr><th>Workers</th><th>Tp</th><th>Speedup</th><th>Eficiencia</th><th>Desbalance</th></tr>`+
+  rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1].toFixed(2)}</td><td>${r[2].toFixed(3)}</td><td>${(r[3]*100).toFixed(2)} %</td><td>${r[4].toFixed(3)}</td></tr>`).join("")+`</table>`;
+}
+runMain();runComm();raceTest(false);raceTest(true);deadTest(false);deadTest(true);retrySim();quorumSim();capSim();scale();
+runMainBtn=document.getElementById("runMain");runMainBtn.addEventListener("click",runMain);
+runCommBtn=document.getElementById("runComm");runCommBtn.addEventListener("click",runComm);
+raceUnsafeBtn.addEventListener("click",()=>raceTest(false));raceSafeBtn.addEventListener("click",()=>raceTest(true));
+deadUnsafeBtn.addEventListener("click",()=>deadTest(false));deadSafeBtn.addEventListener("click",()=>deadTest(true));
+runRetry.addEventListener("click",retrySim);runQ.addEventListener("click",quorumSim);runCAP.addEventListener("click",capSim);runScale.addEventListener("click",scale);
+</script>
+</body>
+</html>
